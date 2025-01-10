@@ -6,6 +6,8 @@ import os
 from functools import partial
 import soundfile as sf
 import sys
+import shutil
+import multiprocessing
 
 def split_audio(audio_path, segment_duration, output_dir):
     y, sr = librosa.load(audio_path, sr=None)
@@ -57,7 +59,11 @@ def merge_energy_data(segments_data, sr):
     
     return all_times, all_energies
 
-def plot_energy(time, energy, output_path='match_1212_energy_plot_10xwin.png', tick_interval=20):
+def get_energy_thres(all_energies):
+    index_at_four_ninths = int(len(all_energies) * 4 / 9)
+    return np.sort(all_energies)[index_at_four_ninths]
+
+def plot_energy(time, energy, output_path='plot.png', tick_interval=20):
     plt.figure(figsize=(10, 6))
     plt.plot(time, energy, label="Short-term Energy")
     plt.xlabel('Time (s)')
@@ -105,64 +111,111 @@ def trim_video(input_video_path, output_video_path, energy, time, energy_thresho
     final_clip = concatenate_videoclips(clips)
     final_clip.write_videofile(output_video_path, codec="libx264", audio_codec="aac")
     
+    print(f"{len(segments)} segments for {input_video_path} were found.")
+    print("segment for {input_video_path}", segments)
+    
     return len(segments), video.duration
 
 
 def calculate_removed_percentage(removed_time, total_time):
     return (removed_time / total_time) * 100
 
+def plot_energy_statistics(all_energies, output_path):
+    intervals = [i * 0.001 for i in range(41)] 
+    counts = [sum(1 for energy in all_energies if energy <= interval) for interval in intervals]
+    
+    plt.figure(dpi=300) 
+
+    plt.plot(intervals, counts, marker='o', linestyle='-', color='b')
+    
+    plt.title('Energy Statistics')
+    plt.xlabel('Interval Point')
+    plt.ylabel('Number of Energies <= Interval Point')
+ 
+    plt.grid(True)
+    
+    plt.savefig(output_path)
+    
 def process_video(input_video_path, output_video_path, segment_duration=200.0):
-    temp_audio_dir = "./temp_audio_segments_match_1212"
+    sample_name = os.path.splitext(os.path.basename(input_video_path))[0]
+    
+    temp_audio_dir = f"./temp_audio_segments_match_{sample_name}"
     os.makedirs(temp_audio_dir, exist_ok=True)
     
-    print("extracting and splitting audio...")
-    audio_path = "./match_1212_temp_audio.wav"
+    print(f"extracting and splitting audio for {sample_name}...")
+    audio_path = f"./temp_audio_segments_match_{sample_name}.wav"
     os.system(f"ffmpeg -i {input_video_path} -vn -acodec pcm_s16le {audio_path}")
     
     y, sr = librosa.load(audio_path, sr=None)
     
     segments = split_audio(audio_path, segment_duration, temp_audio_dir)
     
-    print("extracting energy from segments...")
+    print(f"extracting energy from segments for {sample_name}...")
     segments_data = []
     for i, segment in enumerate(segments):
-        print(f"processing segment {i+1}/{len(segments)}...")
+        print(f"processing {input_video_path} segment {i+1}/{len(segments)}...")
         segment_data = extract_energy_segment(segment)
         segments_data.append(segment_data)
     
-    print("merging energy data...")
+    print(f"merging energy data for {sample_name}...")
     all_times, all_energies = merge_energy_data(segments_data, sr)
+    print(f"length of merged energy array for {sample_name}: ", len(all_energies))
     
-    # print("plotting energy...")
-    # plot_energy(all_times, all_energies)
     
+    # print(f"plotting energy along with time for {sample_name}...")
+    # plot_energy(all_times, all_energies, output_path=f'plot_energy_{sample_name}.png')
+    
+    # print(f"plotting the dist. of energy data for {sample_name}...")
+    # plot_energy_statistics(all_energies, output_path=f'plot_dist_{sample_name}.png')
+    
+    energy_threshold = get_energy_thres(all_energies)
+    print(f"The energy threshold for {sample_name}: {energy_threshold}")
+    
+    print(f"trimming video for {sample_name}...")
+    segments, _ = trim_video(input_video_path, output_video_path, all_energies, all_times, energy_threshold=energy_threshold)
 
-    print("trimming video...")
-    segments, _ = trim_video(input_video_path, output_video_path, all_energies, all_times)
     
-    # calculating the deleting time [WIP]
-    # removed_time = total_time - sum([end - start for (start, end) in segments])
-    # removed_percentage = calculate_removed_percentage(removed_time, total_time)
-    # print(f"deleting {removed_percentage:.2f}% time of video.")
+    print(f"cleaning up temporary files and directory for {sample_name}...")
+    os.remove(audio_path)  
+    for segment_file in os.listdir(temp_audio_dir):
+        segment_path = os.path.join(temp_audio_dir, segment_file)
+        os.remove(segment_path)  
+    shutil.rmtree(temp_audio_dir) 
     
-    # clear temp file [TODO]
-    
-    
+    print(f"Done for {sample_name}.")
 
-
-
+def process_video_wrapper(input_video_path, output_folder):
+    output_video_path = os.path.join(output_folder, os.path.basename(input_video_path))
+    try:
+        process_video(input_video_path, output_video_path)
+        print(f"Processed {input_video_path} and saved to {output_video_path}")
+    except Exception as e:
+        print(f"Error processing {input_video_path}: {e}")
+        
+def process_video_folder(input_folder):
+    input_folder = os.path.abspath(input_folder)
+    video_files = [f for f in os.listdir(input_folder) if f.lower().endswith(('.mp4', '.MP4', '.avi', '.mov', '.mkv'))]
+    
+    output_folder_name = f"output_{os.path.basename(input_folder)}"
+    output_folder = os.path.join(os.path.dirname(input_folder), output_folder_name)
+    os.makedirs(output_folder, exist_ok=True)
+    
+    for video_file in video_files:
+        input_video_path = os.path.join(input_folder, video_file)
+        process_video_wrapper(input_video_path, output_folder)
+    
+        
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python script_name.py input_video output_video")
+    # python auto_clip.py ./auto_clip_folder
+    if len(sys.argv) != 2:
+        print("Usage: python script_name.py <path_to_video_folder>")
         sys.exit(1)
     
-    input_video = sys.argv[1]
-    output_video = sys.argv[2]
+    input_folder = sys.argv[1]
+    process_video_folder(input_folder)
+    print(f"All videos have been processed in {input_folder}.")
     
-    segment_duration = 200.0  
-    
-    process_video(input_video, output_video, segment_duration)
     
     
 if __name__ == "__main__":
