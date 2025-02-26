@@ -87,45 +87,46 @@ def plot_energy(time, energy, output_path='plot.png', tick_interval=20):
 
 
 def trim_video(input_video_path, output_video_path, energy, time, energy_threshold=0.008, min_duration=3.0, start_buffer=0.8, end_buffer=0.6):
-    video = VideoFileClip(input_video_path)
-    video_duration = video.duration
+    with VideoFileClip(input_video_path) as video:
+        video_duration = video.duration
 
-    segments = []
-    current_start = None
+        segments = []
+        current_start = None
 
-    for i in range(len(energy)):
-        if energy[i] > energy_threshold:
-            if current_start is None:
-                current_start = time[i]
-        else:
-            if current_start is not None:
-                current_end = time[i]
-                duration = current_end - current_start
-                if duration >= min_duration:
-                    adjusted_start = max(0, current_start - start_buffer)
-                    adjusted_end = current_end + end_buffer
-                    segments.append((adjusted_start, adjusted_end))
-                current_start = None
+        for i in range(len(energy)):
+            if energy[i] > energy_threshold:
+                if current_start is None:
+                    current_start = time[i]
+            else:
+                if current_start is not None:
+                    current_end = time[i]
+                    duration = current_end - current_start
+                    if duration >= min_duration:
+                        adjusted_start = max(0, current_start - start_buffer)
+                        adjusted_end = current_end + end_buffer
+                        segments.append((adjusted_start, adjusted_end))
+                    current_start = None
 
-    if current_start is not None:
-        current_end = time[-1]
-        duration = current_end - current_start
-        if duration >= min_duration:
-            adjusted_start = max(0, current_start - start_buffer)
-            adjusted_end = min(video_duration, current_end + end_buffer)
-            segments.append((adjusted_start, adjusted_end))
+        if current_start is not None:
+            current_end = time[-1]
+            duration = current_end - current_start
+            if duration >= min_duration:
+                adjusted_start = max(0, current_start - start_buffer)
+                adjusted_end = min(video_duration, current_end + end_buffer)
+                segments.append((adjusted_start, adjusted_end))
 
-    clips = [video.subclipped(max(0, start), min(
-        video_duration, end)) for start, end in segments]
+        clips = [video.subclipped(max(0, start), min(
+            video_duration, end)) for start, end in segments]
 
-    final_clip = concatenate_videoclips(clips)
-    final_clip.write_videofile(
-        output_video_path)
+        final_clip = concatenate_videoclips(clips)
+        final_clip.write_videofile(
+            output_video_path)
+        final_clip.close()
 
-    print(f"{len(segments)} segments for {input_video_path} were found.")
-    print("segment for {input_video_path}", segments)
+        print(f"{len(segments)} segments for {input_video_path} were found.")
+        print("segment for {input_video_path}", segments)
 
-    return len(segments), video.duration
+        return len(segments), video.duration
 
 
 def calculate_removed_percentage(removed_time, total_time):
