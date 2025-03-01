@@ -221,7 +221,8 @@ def main():
     output_file_name = f"{Path(input_file).stem}_cliped{Path(input_file).suffix}"
 
     if output_file is None:
-        output_file = os.path.join(os.getcwd(), output_file_name)
+        output_file = os.path.join(
+            Path(input_file).parent, output_file_name)
     elif Path(output_file).is_dir():
         output_file = os.path.join(output_file, output_file_name)
     else:
