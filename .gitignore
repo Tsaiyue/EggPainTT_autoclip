@@ -3,3 +3,7 @@
 /*.mov
 /*.MOV
 /temp_*
+/build
+/*.spec
+/*.zip
+/dist
