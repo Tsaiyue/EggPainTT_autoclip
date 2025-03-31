@@ -85,6 +85,23 @@ def plot_energy(time, energy, output_path='plot.png', tick_interval=20):
     plt.savefig(output_path)
     plt.close()
 
+def unoverlap_segments(segments):
+    segments.sort(key=lambda x: x[0])
+    
+    merged_segments = []
+    for segment in segments:
+        if not merged_segments:
+            merged_segments.append(segment)
+        else:
+            last_start, last_end = merged_segments[-1]
+            current_start, current_end = segment
+            
+            if last_end >= current_start:
+                merged_segments[-1] = (last_start, max(last_end, current_end))
+            else:
+                merged_segments.append(segment)
+    
+    return merged_segments
 
 def trim_video(input_video_path, output_video_path, energy, time, energy_threshold=0.008, min_duration=3.0, start_buffer=0.8, end_buffer=0.6):
     with VideoFileClip(input_video_path) as video:
@@ -114,10 +131,11 @@ def trim_video(input_video_path, output_video_path, energy, time, energy_thresho
                 adjusted_start = max(0, current_start - start_buffer)
                 adjusted_end = min(video_duration, current_end + end_buffer)
                 segments.append((adjusted_start, adjusted_end))
-
+                
+        segments = unoverlap_segments(segments)
         clips = [video.subclipped(max(0, start), min(
             video_duration, end)) for start, end in segments]
-
+        
         final_clip = concatenate_videoclips(clips)
         final_clip.write_videofile(
             output_video_path)
@@ -162,7 +180,7 @@ def process_video(input_video_path, output_video_path, segment_duration=200.0, i
     os.system(
         f"ffmpeg -i {input_video_path} -vn -acodec pcm_s16le {audio_path}")
 
-    y, sr = librosa.load(audio_path, sr=None)
+    _, sr = librosa.load(audio_path, sr=None)
 
     segments = split_audio(audio_path, segment_duration, temp_audio_dir)
 
@@ -218,7 +236,7 @@ def main():
     output_file = args.output
     is_debug = args.debug
 
-    output_file_name = f"{Path(input_file).stem}_cliped{Path(input_file).suffix}"
+    output_file_name = f"{Path(input_file).stem}_clipped{Path(input_file).suffix}"
 
     if output_file is None:
         output_file = os.path.join(
