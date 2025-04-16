@@ -103,7 +103,7 @@ def unoverlap_segments(segments):
     
     return merged_segments
 
-def trim_video(input_video_path, output_video_path, energy, time, energy_threshold=0.008, min_duration=2, start_buffer=1.2, end_buffer=0.0):
+def trim_video(input_video_path, output_video_path, energy, time, energy_threshold=0.008, min_duration=2, start_buffer=1.2, end_buffer=0.5):
     with VideoFileClip(input_video_path) as video:
         video_duration = video.duration
 
