@@ -13,7 +13,7 @@ import multiprocessing
 import argparse
 from pathlib import Path
 
-
+ 
 def split_audio(audio_path, segment_duration, output_dir):
     y, sr = librosa.load(audio_path, sr=None)
     duration = librosa.get_duration(y=y, sr=sr)
@@ -67,7 +67,7 @@ def merge_energy_data(segments_data, sr):
 
 
 def get_energy_thres(all_energies):
-    index_at_four_ninths = int(len(all_energies) * 4 / 9)
+    index_at_four_ninths = int(len(all_energies) * 3 / 8)
     return np.sort(all_energies)[index_at_four_ninths]
 
 
@@ -103,7 +103,7 @@ def unoverlap_segments(segments):
     
     return merged_segments
 
-def trim_video(input_video_path, output_video_path, energy, time, energy_threshold=0.008, min_duration=3.0, start_buffer=0.8, end_buffer=0.6):
+def trim_video(input_video_path, output_video_path, energy, time, energy_threshold=0.008, min_duration=2, start_buffer=1.2, end_buffer=0.0):
     with VideoFileClip(input_video_path) as video:
         video_duration = video.duration
 
