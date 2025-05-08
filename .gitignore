@@ -1,10 +1,10 @@
 /.venv
-/*.png
-/*.mp4
+**/*.png
+**/*.mp4
 /*.mov
 /*.MOV
-/temp_*
+**/temp_*
 /build
 /*.spec
-/*.zip
+**/*.zip
 /dist
